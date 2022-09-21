@@ -1,127 +1,166 @@
 --[[
-	TitanApexisCrystal: A simple Display of current Apexis Crystal value as a percent
-	Author: Blakenfeder
-	
-	Based on addon "Titan Panel [Honor Points]" by subwired.
+  TitanApexisCrystal: A simple Display of current Apexis Crystal value
+  Author: Blakenfeder
 --]]
 
--- Default translations (enUS)
-local L = {}
-L["buttonLabel"] = "Crystal: "
-L["tooltipTitle"] = "Apexis Crystal"
-L["tooltipDescription"] = "The enduring legacy of a lost\rcivilization, Apexis crystals contain\runtold reserves of magical power."
-L["tooltipCountLabel"] = "Total Maximum: "
+-- Define addon base object
+local TitanApexisCrystal = {
+  Const = {
+    Id = "ApexisCrystal",
+    Name = "TitanApexisCrystal",
+    DisplayName = "Titan Panel [Apexis Crystal]",
+    Version = "",
+    Author = "",
+  },
+  IsInitialized = false,
+}
+function TitanApexisCrystal.GetCurrencyInfo()
+  local i = 0
+  for i = 1, C_CurrencyInfo.GetCurrencyListSize(), 1 do
+    info = C_CurrencyInfo.GetCurrencyListInfo(i)
+    
+    -- if (not TitanApexisCrystal.IsInitialized and DEFAULT_CHAT_FRAME) then
+    --   print(info.name, tostring(info.iconFileID))
+    -- end
+    
+    if tostring(info.iconFileID) == "1061300" then
+      return info
+    end
+  end
+end
+function TitanApexisCrystal.Util_GetFormattedNumber(number)
+  if number >= 1000 then
+    return string.format("%d,%03d", number / 1000, number % 1000)
+  else
+    return string.format ("%d", number)
+  end
+end
 
-local menutext = "Titan|cffff8800 "..L["tooltipTitle"].."|r"
-local ID = "AC"
-local elap, currencyCount = 0, 0.0
+-- Load metadata
+TitanApexisCrystal.Const.Version = GetAddOnMetadata(TitanApexisCrystal.Const.Name, "Version")
+TitanApexisCrystal.Const.Author = GetAddOnMetadata(TitanApexisCrystal.Const.Name, "Author")
+
+-- Text colors
+local BKFD_C_BURGUNDY = "|cff993300"
+local BKFD_C_GRAY = "|cff999999"
+local BKFD_C_GREEN = "|cff00ff00"
+local BKFD_C_ORANGE = "|cffff8000"
+local BKFD_C_WHITE = "|cffffffff"
+local BKFD_C_YELLOW = "|cffffcc00"
+
+-- Load Library references
+local LT = LibStub("AceLocale-3.0"):GetLocale("Titan", true)
+local L = LibStub("AceLocale-3.0"):GetLocale(TitanApexisCrystal.Const.Id, true)
+
+-- Currency update variables
+local BKFD_AC_UPDATE_FREQUENCY = 0.0
+local currencyCount = 0.0
 local currencyMaximum
 
--- Main button frame and addon base
-local f = CreateFrame("Button", "TitanPanelACButton", CreateFrame("Frame", nil, UIParent), "TitanPanelComboTemplate")
-f:SetFrameStrata("FULLSCREEN")
-f:SetScript("OnEvent", function(this, event, ...) this[event](this, ...) end)
-f:RegisterEvent("ADDON_LOADED")
+function TitanPanelApexisCrystalButton_OnLoad(self)
+  self.registry = {
+    id = TitanApexisCrystal.Const.Id,
+    category = "Information",
+    version = TitanApexisCrystal.Const.Version,
+    menuText = L["BKFD_TITAN_AC_MENU_TEXT"], 
+    buttonTextFunction = "TitanPanelApexisCrystalButton_GetButtonText",
+    tooltipTitle = L["BKFD_TITAN_AC_TOOLTIP_TITLE"],
+    tooltipTextFunction = "TitanPanelApexisCrystalButton_GetTooltipText",
+    icon = "Interface\\Icons\\inv_apexis_draenor",
+    iconWidth = 16,
+    controlVariables = {
+      ShowIcon = true,
+      ShowLabelText = true,
+    },
+    savedVariables = {
+      ShowIcon = 1,
+      ShowLabelText = false,
+      ShowColoredText = false,
+    },
+    -- frequency = 2,
+  };
 
 
-function f:ADDON_LOADED(a1)
---print ("a1 = " .. a1)
-	if a1 ~= "TitanGarrisonResources" then -- needs to be the name of the folder that the addon is in
-	return 
-	end
-	self:UnregisterEvent("ADDON_LOADED")
-	self.ADDON_LOADED = nil
-	
-	-- Set different translations if needed
-	if GetLocale() == "esMX" then
-		L["buttonLabel"] = "Cristal: "
-		L["tooltipTitle"] = "Cristal de ápices"
-		L["tooltipDescription"] = "El perdurable legado de una\rcivilización perdida, los cristales de\rápices contienen reservas\rincalculables de poder mágico."
-		L["tooltipCountLabel"] = "Máximo total: "
-	end
-
-	local name, isHeader, isExpanded, isUnused, isWatched, count, icon, maximum, hasWeeklyLimit, currentWeeklyAmount, unknown
-	local i = 0
-	local CurrencyIndex = 0
-	local myicon = "Interface\\Icons\\inv_apexis_draenor.blp"
-	local mycheck = "Interface\\Icons\\Inv_Apexis_Draenor"
-
-	self.registry = {
-		id = ID,
-		menuText = menutext,
-		buttonTextFunction = "TitanPanelACButton_GetButtonText",
-		tooltipTitle = L["tooltipTitle"],
-		tooltipTextFunction = "TitanPanelACButton_GetTooltipText",
-		frequency = 2,
-		icon = myicon,
-		iconWidth = 16,
-		category = "Information",
-		savedVariables = {
-			ShowIcon = 1,
-			ShowLabelText = false,
-
-		},
-	}
-	self:SetScript("OnUpdate", function(this, a1)
-		elap = elap + a1
-		if elap < 1 then return end
-
-		for i = 1, GetCurrencyListSize(), 1 do
-			
-			name, isHeader, isExpanded, isUnused, isWatched, count, icon, maximum, hasWeeklyLimit, currentWeeklyAmount, unknown = GetCurrencyListInfo(i)
-			
-			if string.lower(tostring(icon)) == string.lower(mycheck) then
-				CurrencyIndex = i
-			end
-			
-		end
-		
-		name, isHeader, isExpanded, isUnused, isWatched, count, icon, maximum, hasWeeklyLimit, currentWeeklyAmount, unknown = GetCurrencyListInfo(CurrencyIndex)
-
-		currencyCount = count
-		currencyMaximum = maximum
-		
-		TitanPanelButton_UpdateButton(ID)
-		elap = 0
-	end)
-		
-	--TitanPanelButton_OnLoad(self)
+  self:RegisterEvent("PLAYER_ENTERING_WORLD");
+  self:RegisterEvent("PLAYER_LOGOUT");
 end
 
+function TitanPanelApexisCrystalButton_GetButtonText(id)
+  local currencyCountText
+  if not currencyCount then
+    currencyCountText = "??"
+  else  
+    currencyCountText = TitanApexisCrystal.Util_GetFormattedNumber(currencyCount)
+  end
 
-
-----------------------------------------------
-function TitanPanelACButton_GetButtonText()
-----------------------------------------------
-	local currencyCountText
-	if not currencyCount then
-		currencyCountText = TitanUtils_GetHighlightText("??")
-	else	
-		currencyCountText = TitanUtils_GetHighlightText(string.format("%.0f", currencyCount) .."")
-	end
-	return L["buttonLabel"], currencyCountText
+  return L["BKFD_TITAN_AC_BUTTON_LABEL"], TitanUtils_GetHighlightText(currencyCountText)
 end
 
------------------------------------------------
-function TitanPanelACButton_GetTooltipText()
------------------------------------------------
+function TitanPanelApexisCrystalButton_GetTooltipText()
 
-return L["tooltipDescription"].."\r                                                                     \r"..L["tooltipCountLabel"]..TitanUtils_GetHighlightText(currencyCount.."/"..currencyMaximum)
+  local totalLabel = L["BKFD_TITAN_AC_TOOLTIP_COUNT_LABEL"]
+  local totalValue = string.format(
+    "%s/%s",
+    TitanApexisCrystal.Util_GetFormattedNumber(currencyCount),
+    TitanApexisCrystal.Util_GetFormattedNumber(currencyMaximum)
+  )
+  if(not currencyMaximum or currencyMaximum == 0) then
+    totalLabel = L["BKFD_TITAN_AC_TOOLTIP_COUNT_LABEL_TOTAL"]
+    totalValue = string.format(
+      "%s",
+      TitanApexisCrystal.Util_GetFormattedNumber(currencyCount)
+    )
+  end
 
+  return
+    L["BKFD_TITAN_AC_TOOLTIP_DESCRIPTION"].."\r"..
+    "                                                                     \r"..
+    totalLabel..TitanUtils_GetHighlightText(totalValue)
 end
 
-local temp = {}
-local function UIDDM_Add(text, func, checked, keepShown)
-	temp.text, temp.func, temp.checked, temp.keepShownOnClick = text, func, checked, keepShown
-	UIDropDownMenu_AddButton(temp)
+function TitanPanelApexisCrystalButton_OnUpdate(self, elapsed)
+  BKFD_AC_UPDATE_FREQUENCY = BKFD_AC_UPDATE_FREQUENCY - elapsed;
+
+  if BKFD_AC_UPDATE_FREQUENCY <= 0 then
+    BKFD_AC_UPDATE_FREQUENCY = 1;
+
+    local info = TitanApexisCrystal.GetCurrencyInfo()
+    if (info) then
+      currencyCount = tonumber(info.quantity)
+      currencyMaximum = tonumber(info.maxQuantity)
+    end
+
+    TitanPanelButton_UpdateButton(TitanApexisCrystal.Const.Id)
+  end
 end
-----------------------------------------------------
-function TitanPanelRightClickMenu_PrepareACMenu()
-----------------------------------------------------
-	TitanPanelRightClickMenu_AddTitle(TitanPlugins[ID].menuText)
-	
-	TitanPanelRightClickMenu_AddToggleIcon(ID)
-	TitanPanelRightClickMenu_AddToggleLabelText(ID)
-	TitanPanelRightClickMenu_AddSpacer()
-	TitanPanelRightClickMenu_AddCommand(TITAN_PANEL_MENU_HIDE, ID, TITAN_PANEL_MENU_FUNC_HIDE)
+
+function TitanPanelApexisCrystalButton_OnEvent(self, event, ...)
+  if (event == "PLAYER_ENTERING_WORLD") then
+    if (not TitanApexisCrystal.IsInitialized and DEFAULT_CHAT_FRAME) then
+      DEFAULT_CHAT_FRAME:AddMessage(
+        BKFD_C_YELLOW..TitanApexisCrystal.Const.DisplayName.." "..
+        BKFD_C_GREEN..TitanApexisCrystal.Const.Version..
+        BKFD_C_YELLOW.." by "..
+        BKFD_C_ORANGE..TitanApexisCrystal.Const.Author)
+      -- TitanApexisCrystal.GetCurrencyInfo()
+      TitanPanelButton_UpdateButton(TitanApexisCrystal.Const.Id)
+      TitanApexisCrystal.IsInitialized = true
+    end
+    return;
+  end  
+  if (event == "PLAYER_LOGOUT") then
+    TitanApexisCrystal.IsInitialized = false;
+    return;
+  end
+end
+
+function TitanPanelRightClickMenu_PrepareApexisCrystalMenu()
+  local id = TitanApexisCrystal.Const.Id;
+
+  TitanPanelRightClickMenu_AddTitle(TitanPlugins[id].menuText)
+  
+  TitanPanelRightClickMenu_AddToggleIcon(id)
+  TitanPanelRightClickMenu_AddToggleLabelText(id)
+  TitanPanelRightClickMenu_AddSpacer()
+  TitanPanelRightClickMenu_AddCommand(LT["TITAN_PANEL_MENU_HIDE"], id, TITAN_PANEL_MENU_FUNC_HIDE)
 end
