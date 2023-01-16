@@ -12,19 +12,27 @@ local TitanApexisCrystal = {
     Version = "",
     Author = "",
   },
+  CurrencyConst = {
+    Id = 823,
+    Icon = "Interface\\Icons\\inv_apexis_draenor",
+    Name = "",
+    Description = "",
+    Color = "|cffffffff",
+  },
   IsInitialized = false,
 }
 function TitanApexisCrystal.GetCurrencyInfo()
-  local i = 0
-  for i = 1, C_CurrencyInfo.GetCurrencyListSize(), 1 do
-    info = C_CurrencyInfo.GetCurrencyListInfo(i)
+  return C_CurrencyInfo.GetCurrencyInfo(TitanApexisCrystal.CurrencyConst.Id)
+end
+function TitanApexisCrystal.InitCurrencyConst()
+  local info = TitanApexisCrystal.GetCurrencyInfo()
+  if (info) then
+    TitanApexisCrystal.CurrencyConst.Name = info.name
+    TitanApexisCrystal.CurrencyConst.Description = info.description
     
-    -- if (not TitanApexisCrystal.IsInitialized and DEFAULT_CHAT_FRAME) then
-    --   print(info.name, tostring(info.iconFileID))
-    -- end
-    
-    if tostring(info.iconFileID) == "1061300" then
-      return info
+    local r, g, b, hex = GetItemQualityColor(info.quality)
+    if (hex) then
+      TitanApexisCrystal.CurrencyConst.Color = '|c' .. hex
     end
   end
 end
@@ -34,6 +42,20 @@ function TitanApexisCrystal.Util_GetFormattedNumber(number)
   else
     return string.format ("%d", number)
   end
+end
+function TitanApexisCrystal.Util_WrapText(text, lineLength)
+  local wrappedText = ""
+  local currentLine = ""
+  for word in string.gmatch(text, "[^%s]+") do
+      if string.len(currentLine) + string.len(word) > lineLength then
+          wrappedText = wrappedText .. currentLine .. "\n"
+          currentLine = word .. " "
+      else
+          currentLine = currentLine .. word .. " "
+      end
+  end
+  wrappedText = wrappedText .. currentLine
+  return wrappedText
 end
 
 -- Load metadata
@@ -49,37 +71,31 @@ local BKFD_C_RED = "|cffff0000"
 local BKFD_C_WHITE = "|cffffffff"
 local BKFD_C_YELLOW = "|cffffcc00"
 
--- Text item colors (AARRGGBB)
-local BKFD_C_COMMON = "|cffffffff"
-local BKFD_C_UNCOMMON = "|cff1eff00"
-local BKFD_C_RARE = "|cff0070dd"
-local BKFD_C_EPIC = "|cffa335ee"
-local BKFD_C_LEGENDARY = "|cffff8000"
-local BKFD_C_ARTIFACT = "|cffe5cc80"
-local BKFD_C_BLIZZARD = "|cff00ccff"
-
 -- Load Library references
 local LT = LibStub("AceLocale-3.0"):GetLocale("Titan", true)
 local L = LibStub("AceLocale-3.0"):GetLocale(TitanApexisCrystal.Const.Id, true)
 
 -- Currency update variables
-local BKFD_AC_UPDATE_FREQUENCY = 0.0
+local updateFrequency = 0.0
 local currencyCount = 0.0
 local currencyMaximum
+local wasMaximumReached = false
 local seasonalCount = 0.0
 local isSeasonal = false
 local currencyDiscovered = false
 
 function TitanPanelApexisCrystalButton_OnLoad(self)
+  TitanApexisCrystal.InitCurrencyConst()
+
   self.registry = {
     id = TitanApexisCrystal.Const.Id,
     category = "Information",
     version = TitanApexisCrystal.Const.Version,
-    menuText = L["BKFD_TITAN_AC_MENU_TEXT"], 
+    menuText = TitanApexisCrystal.CurrencyConst.Name,
     buttonTextFunction = "TitanPanelApexisCrystalButton_GetButtonText",
-    tooltipTitle = BKFD_C_UNCOMMON..L["BKFD_TITAN_AC_TOOLTIP_TITLE"],
+    tooltipTitle = TitanApexisCrystal.CurrencyConst.Color .. TitanApexisCrystal.CurrencyConst.Name,
     tooltipTextFunction = "TitanPanelApexisCrystalButton_GetTooltipText",
-    icon = "Interface\\Icons\\inv_apexis_draenor",
+    icon = TitanApexisCrystal.CurrencyConst.Icon,
     iconWidth = 16,
     controlVariables = {
       ShowIcon = true,
@@ -90,7 +106,6 @@ function TitanPanelApexisCrystalButton_OnLoad(self)
       ShowLabelText = false,
       ShowColoredText = false,
     },
-    -- frequency = 2,
   };
 
 
@@ -106,24 +121,29 @@ function TitanPanelApexisCrystalButton_GetButtonText(id)
     currencyCountText = TitanApexisCrystal.Util_GetFormattedNumber(currencyCount)
   end
 
-  if (currencyMaximum and not(currencyMaximum == 0) and currencyCount and currencyMaximum == currencyCount) then
-    currencyCountText = BKFD_C_RED..currencyCountText
+  if (wasMaximumReached) then
+    currencyCountText = BKFD_C_RED .. currencyCountText
   end
 
-  return L["BKFD_TITAN_AC_BUTTON_LABEL"], TitanUtils_GetHighlightText(currencyCountText)
+  return TitanApexisCrystal.CurrencyConst.Name .. ": ", TitanUtils_GetHighlightText(currencyCountText)
 end
 
 function TitanPanelApexisCrystalButton_GetTooltipText()
+  local currencyDescription = TitanApexisCrystal.Util_WrapText(TitanApexisCrystal.CurrencyConst.Description, 36)
+
+
   if (not currencyDiscovered) then
     return
-      L["BKFD_TITAN_AC_TOOLTIP_DESCRIPTION"].."\r"..
-      " \r"..
-      TitanUtils_GetHighlightText(L["BKFD_TITAN_AC_TOOLTIP_NOT_YET_DISCOVERED"])
+      currencyDescription .. "\r" ..
+      " \r" ..
+      TitanUtils_GetHighlightText(L["BKFD_TITAN_TOOLTIP_NOT_YET_DISCOVERED"])
   end
 
   -- Set which total value will be displayed
   local tooltipCurrencyCount = currencyCount
+  local tooltipCurrencyCurrentCount = 0
   if (isSeasonal) then
+    tooltipCurrencyCurrentCount = tooltipCurrencyCount
     tooltipCurrencyCount = seasonalCount
   end
 
@@ -138,36 +158,54 @@ function TitanPanelApexisCrystalButton_GetTooltipText()
       "%s",
       TitanApexisCrystal.Util_GetFormattedNumber(tooltipCurrencyCount)
     )
-  elseif (currencyMaximum == tooltipCurrencyCount) then
-    totalValue = BKFD_C_RED..totalValue
+  elseif (wasMaximumReached) then
+    totalValue = BKFD_C_RED .. totalValue
   end
+  local seasonCurrentValue = TitanApexisCrystal.Util_GetFormattedNumber(tooltipCurrencyCurrentCount)
   
-  local totalLabel = L["BKFD_TITAN_AC_TOOLTIP_COUNT_LABEL_TOTAL_MAXIMUM"]
+  local totalLabel = L["BKFD_TITAN_TOOLTIP_COUNT_LABEL_TOTAL_MAXIMUM"]
   if (isSeasonal) then
-    totalLabel = L["BKFD_TITAN_AC_TOOLTIP_COUNT_LABEL_TOTAL_SEASONAL"]
+    totalLabel = L["BKFD_TITAN_TOOLTIP_COUNT_LABEL_TOTAL_SEASONAL"]
   elseif (not currencyMaximum or currencyMaximum == 0) then
-    totalLabel = L["BKFD_TITAN_AC_TOOLTIP_COUNT_LABEL_TOTAL"]
+    totalLabel = L["BKFD_TITAN_TOOLTIP_COUNT_LABEL_TOTAL"]
   end
 
-  return
-    L["BKFD_TITAN_AC_TOOLTIP_DESCRIPTION"].."\r"..
-    " \r"..
-    totalLabel..TitanUtils_GetHighlightText(totalValue)
+  if (isSeasonal and currencyMaximum and currencyMaximum > 0) then
+    return
+      currencyDescription .. "\r" ..
+      " \r" ..
+      L["BKFD_TITAN_TOOLTIP_COUNT_LABEL_TOTAL"]..TitanUtils_GetHighlightText(seasonCurrentValue) .. "\r" ..
+      totalLabel .. TitanUtils_GetHighlightText(totalValue)
+  else
+    return
+      currencyDescription .. "\r" ..
+      " \r" ..
+      totalLabel .. TitanUtils_GetHighlightText(totalValue)
+  end
 end
 
 function TitanPanelApexisCrystalButton_OnUpdate(self, elapsed)
-  BKFD_AC_UPDATE_FREQUENCY = BKFD_AC_UPDATE_FREQUENCY - elapsed;
+  updateFrequency = updateFrequency - elapsed;
 
-  if BKFD_AC_UPDATE_FREQUENCY <= 0 then
-    BKFD_AC_UPDATE_FREQUENCY = 1;
+  if updateFrequency <= 0 then
+    updateFrequency = 1;
 
-    local info = TitanApexisCrystal.GetCurrencyInfo()
+    local info = TitanApexisCrystal.GetCurrencyInfo(TitanApexisCrystal.CurrencyConst.Id)
     if (info) then
-      currencyDiscovered = true
+      currencyDiscovered = info.discovered
       currencyCount = tonumber(info.quantity)
       currencyMaximum = tonumber(info.maxQuantity)
       seasonalCount = tonumber(info.totalEarned)
       isSeasonal = info.useTotalEarnedForMaxQty
+
+      wasMaximumReached =
+          currencyMaximum and not(currencyMaximum == 0)
+          and isSeasonal and seasonalCount
+          and seasonalCount >= currencyMaximum
+        or
+          currencyMaximum and not(currencyMaximum == 0)
+          and not isSeasonal and currencyCount
+          and currencyCount >= currencyMaximum
     end
 
     TitanPanelButton_UpdateButton(TitanApexisCrystal.Const.Id)
@@ -178,11 +216,10 @@ function TitanPanelApexisCrystalButton_OnEvent(self, event, ...)
   if (event == "PLAYER_ENTERING_WORLD") then
     if (not TitanApexisCrystal.IsInitialized and DEFAULT_CHAT_FRAME) then
       DEFAULT_CHAT_FRAME:AddMessage(
-        BKFD_C_YELLOW..TitanApexisCrystal.Const.DisplayName.." "..
-        BKFD_C_GREEN..TitanApexisCrystal.Const.Version..
-        BKFD_C_YELLOW.." by "..
-        BKFD_C_ORANGE..TitanApexisCrystal.Const.Author)
-      -- TitanApexisCrystal.GetCurrencyInfo()
+        BKFD_C_YELLOW .. TitanApexisCrystal.Const.DisplayName .. " " ..
+        BKFD_C_GREEN .. TitanApexisCrystal.Const.Version ..
+        BKFD_C_YELLOW .. " by "..
+        BKFD_C_ORANGE .. TitanApexisCrystal.Const.Author)
       TitanPanelButton_UpdateButton(TitanApexisCrystal.Const.Id)
       TitanApexisCrystal.IsInitialized = true
     end
